@@ -66,14 +66,12 @@ instance (Functor e) => Functor (Free e) where
   fmap f (Free g) = Free $ fmap (fmap f) g
 
 instance (Functor e) => Applicative (Free e) where
-  pure :: Functor e => a -> Free e a
+  pure :: (Functor e) => a -> Free e a
   pure = Pure
   (<*>) = ap
 
 instance (Functor e) => Monad (Free e) where
   Pure x >>= f = f x
-  -- g :: e (Free e a)
-  -- f :: a -> Free e b
   Free g >>= f = Free $ h <$> g
     where
       h x = x >>= f

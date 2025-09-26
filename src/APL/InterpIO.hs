@@ -66,25 +66,38 @@ runEvalIO evalm = do
       putStrLn p
       runEvalIO' r db m
     runEvalIO' _ _ (Free (ErrorOp e)) = pure $ Left e
-    runEvalIO' r s (Free (TryCatchOp m1 m2 k)) = do
-      a1 <- runEvalIO' r s m1
-      a2 <- runEvalIO' r s m2
+    runEvalIO' r db (Free (TryCatchOp m1 m2 k)) = do
+      a1 <- runEvalIO' r db m1
+      a2 <- runEvalIO' r db m2
       case a1 of
-        Left _ -> runEvalIO' r s $
+        Left _ -> runEvalIO' r db $
           case a2 of
             Left err -> failure err
             Right x2 -> k x2
-        Right x -> runEvalIO' r s $ k x
-    runEvalIO' r s (Free (KvGetOp key k)) = do
-      db <- readDB s
-      res <- case db of
+        Right x -> runEvalIO' r db $ k x
+    runEvalIO' r db (Free (KvGetOp key k)) = do
+      s <- readDB db
+      res <- case s of
         (Left err) -> pure $ failure err
-        (Right state) -> (let v = lookup key state in maybe (pure $ failure $ "Invalid key: " ++ show key) undefined v)
-      runEvalIO' r s res
-    runEvalIO' r s (Free (KvPutOp key val m)) = do
-      db <- readDB s
-      let state = either undefined id db
-      let state' = (key, val) : state
-      writeDB s state'
-      runEvalIO' r s m
+        (Right state) ->
+          let v = lookup key state
+           in case v of
+                Just x -> pure $ k x
+                Nothing -> do
+                  putStrLn $ "Invalid key: " ++ show key
+                  k <$> promptUntilWorks
+      runEvalIO' r db res 
+      where
+        promptUntilWorks :: IO Val
+        promptUntilWorks = do
+          x <- prompt "Enter a replacement: "
+          maybe promptUntilWorks pure (readVal x)
+    runEvalIO' r db (Free (KvPutOp key val m)) = do
+      s <- readDB db
+      case s of
+        Left err -> runEvalIO' r db $ failure err
+        Right state -> do
+          let state' = (key, val) : state
+          writeDB db state'
+          runEvalIO' r db m
     runEvalIO' r s (Free (TransactionOp m k)) = runEvalIO' r s (k undefined)

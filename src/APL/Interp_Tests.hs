@@ -80,6 +80,7 @@ pureTests =
       testCase "Transaction Bad Propagate" $
         eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
           @?= ([], Left "Unknown variable: die")
+          --
     ]
 
 ioTests :: TestTree
@@ -119,4 +120,8 @@ ioTests =
           --            Print "This is 1" $
           --              CstInt 1
           --    (out, res) @?= (["This is 1: 1", "This is also 1: 1"], Right $ ValInt 1)
+      ,
+      testCase "Missing Keys" $
+        evalIO' (KvGet (CstInt 42))
+          >>= (@?= Left "Invalid key: ValInt 42")
     ]

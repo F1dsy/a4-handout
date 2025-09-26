@@ -18,13 +18,13 @@ runEval = runEval' envEmpty stateInitial
         (_, Right x) -> runEval' r s $ k x
     runEval' r s (Free (KvGetOp key k)) = runEval' r s (let v = lookup key s in maybe (failure $ "Invalid key: " ++ show key) k v)
     runEval' r s (Free (KvPutOp key val m)) = runEval' r ((key, val) : s) m
-    runEval' r s (Free (TransactionOp m k)) =
-      let oldState = s
-       in runEval' r s $
-            let (str, res) = runEval' r s m
-             in case res of
-                  Left err -> Free (ErrorOp err)
-                  Right val -> k val
+    runEval' r s (Free (TransactionOp m k)) = runEval' r s $ do
+      x <- m
+      k x
 
--- x <- m
--- k x
+-- let oldState = s
+--  in runEval' r s $
+--       let (str, res) = runEval' r s m
+--        in case res of
+--             Left err -> Free (ErrorOp err)
+--             Right val -> k val
