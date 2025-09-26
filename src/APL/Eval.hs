@@ -62,7 +62,7 @@ eval (ForLoop (loopparam, initial) (iv, bound) body) = do
   bound_v <- eval bound
   case bound_v of
     ValInt bound_int ->
-      loop 0 bound_int initial_v
+      looping $ loop 0 bound_int initial_v
     _ ->
       failure "Non-integral loop bound"
   where

@@ -84,6 +84,8 @@ data EvalOp a
   | KvGetOp Val (Val -> a)
   | KvPutOp Val Val a
   | TransactionOp (EvalM Val) (Val -> a)
+  | LoopOp (EvalM Val) (Val -> a)
+  | BreakLoopOp Val
 
 instance Functor EvalOp where
   fmap :: (a -> b) -> EvalOp a -> EvalOp b
@@ -94,6 +96,8 @@ instance Functor EvalOp where
   fmap f (KvGetOp key k) = KvGetOp key $ f . k
   fmap f (KvPutOp key val k) = KvPutOp key val $ f k
   fmap f (TransactionOp m k) = TransactionOp m $ f . k
+  fmap f (LoopOp m k) = LoopOp m $ f . k
+  fmap _ (BreakLoopOp v) = BreakLoopOp v
 
 type EvalM a = Free EvalOp a
 
@@ -135,8 +139,8 @@ transaction v = Free $ TransactionOp v pure
 -- | Enclose a computation @m@ such that if a 'breakLoop' is executed in @m@,
 -- execution will return here.
 looping :: EvalM Val -> EvalM Val
-looping = error "TODO"
+looping m = Free $ LoopOp m pure
 
 -- | Return the provided value from the most immediately enclosing 'looping'.
 breakLoop :: Val -> EvalM a
-breakLoop = error "TODO"
+breakLoop v = Free $ BreakLoopOp v

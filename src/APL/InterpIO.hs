@@ -85,13 +85,10 @@ runEvalIO evalm = do
                 Just x -> pure $ k x
                 Nothing -> do
                   putStrLn $ "Invalid key: " ++ show key
-                  k <$> promptUntilWorks
-      runEvalIO' r db res 
-      where
-        promptUntilWorks :: IO Val
-        promptUntilWorks = do
-          x <- prompt "Enter a replacement: "
-          maybe promptUntilWorks pure (readVal x)
+                  x <- prompt "Enter a replacement: "
+                  maybe (pure $ failure "Failed to get value from input") (pure . k) (readVal x)
+
+      runEvalIO' r db res
     runEvalIO' r db (Free (KvPutOp key val m)) = do
       s <- readDB db
       case s of
@@ -101,3 +98,7 @@ runEvalIO evalm = do
           writeDB db state'
           runEvalIO' r db m
     runEvalIO' r s (Free (TransactionOp m k)) = runEvalIO' r s (k undefined)
+    runEvalIO' r s (Free (LoopOp m k)) = runEvalIO' r s $ do
+      x <- m
+      k x
+    runEvalIO' r s (Free (BreakLoopOp v)) = runEvalIO' r s $ Pure undefined

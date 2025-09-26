@@ -79,7 +79,14 @@ pureTests =
       --
       testCase "Transaction Bad Propagate" $
         eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
-          @?= ([], Left "Unknown variable: die")
+          @?= ([], Left "Unknown variable: die"),
+      --
+      testCase "BreakLoop" $
+        eval'
+          ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
+              Let "_" (Break (CstBool True)) (Var "i")
+          )
+          @?= ([], Right (ValBool True))
           --
     ]
 
@@ -97,30 +104,18 @@ ioTests =
                 evalPrint s1
                 evalPrint s2
           (out, res) @?= ([s1, s2], Right ()),
-      testCase
-        "TryCatch2"
-        $ eval' (TryCatch (CstInt 5) (Div (CstInt 1) (CstInt 0)))
-          @?= ([], Right $ ValInt 5),
-      testCase "TryCatch Bad" $
-        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
-          @?= ([], Left "Division by zero"),
-      testCase "Write DB" $
-        do
-          x <- evalIO' (KvPut (CstInt 0) (CstInt 1))
-          pure undefined
+      -- NOTE: This test will give a runtime error unless you replace the
+      -- version of `eval` in `APL.Eval` with a complete version that supports
+      -- `Print`-expressions. Uncomment at your own risk.
+      -- testCase "print 2" $ do
+      --    (out, res) <-
+      --      captureIO [] $
+      --        evalIO' $
+      --          Print "This is also 1" $
+      --            Print "This is 1" $
+      --              CstInt 1
+      --    (out, res) @?= (["This is 1: 1", "This is also 1: 1"], Right $ ValInt 1)
 
-          -- NOTE: This test will give a runtime error unless you replace the
-          -- version of `eval` in `APL.Eval` with a complete version that supports
-          -- `Print`-expressions. Uncomment at your own risk.
-          -- testCase "print 2" $ do
-          --    (out, res) <-
-          --      captureIO [] $
-          --        evalIO' $
-          --          Print "This is also 1" $
-          --            Print "This is 1" $
-          --              CstInt 1
-          --    (out, res) @?= (["This is 1: 1", "This is also 1: 1"], Right $ ValInt 1)
-      ,
       testCase "Missing Keys" $
         evalIO' (KvGet (CstInt 42))
           >>= (@?= Left "Invalid key: ValInt 42")

@@ -21,6 +21,12 @@ runEval = runEval' envEmpty stateInitial
     runEval' r s (Free (TransactionOp m k)) = runEval' r s $ do
       x <- m
       k x
+    runEval' r s (Free (LoopOp m k)) =
+      case runEval' r s m of
+        (_, Left "BreakLoop") -> runEval' r s undefined
+        (_, Left _) -> runEval' r s undefined
+        (_, Right x) -> runEval' r s $ k x
+    runEval' _ _ (Free (BreakLoopOp v)) = ([], Left "BreakLoop")
 
 -- let oldState = s
 --  in runEval' r s $
