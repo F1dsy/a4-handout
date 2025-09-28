@@ -129,7 +129,13 @@ ioTests =
         (out, res) <- captureIO ["ValBool True"] $
           evalIO' (KvGet (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
-        res @?= Right (ValBool True)
+        res @?= Right (ValBool True),
+        testCase "Missing keys simulated string" $ do
+        (out, res) <- captureIO ["lol"] $
+          evalIO' (KvGet (CstInt 0))
+        out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
+        res @?= Left "Invalid value input: lol"
+        
 
     
     ]

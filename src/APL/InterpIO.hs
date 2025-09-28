@@ -85,7 +85,9 @@ runEvalIO evalm = do
                 Just x -> pure $ k x
                 Nothing -> do
                   x <- prompt $ "Invalid key: " ++ show key ++ ". Enter a replacement: "
-                  maybe (pure $ failure "Failed to get value from input") (pure . k) (readVal x)
+                  case readVal x of
+                    Just val  -> pure $ k val
+                    Nothing -> pure $ failure ("Invalid value input: " ++ x)
 
       runEvalIO' r db res
     runEvalIO' r db (Free (KvPutOp key val m)) = do
