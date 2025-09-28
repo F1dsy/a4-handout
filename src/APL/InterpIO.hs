@@ -84,8 +84,7 @@ runEvalIO evalm = do
            in case v of
                 Just x -> pure $ k x
                 Nothing -> do
-                  putStrLn $ "Invalid key: " ++ show key
-                  x <- prompt "Enter a replacement: "
+                  x <- prompt $ "Invalid key: " ++ show key ++ ". Enter a replacement: "
                   maybe (pure $ failure "Failed to get value from input") (pure . k) (readVal x)
 
       runEvalIO' r db res
