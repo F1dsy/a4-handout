@@ -57,15 +57,11 @@ pureTests =
         eval' (Div (CstInt 7) (CstInt 0))
           @?= ([], Left "Division by zero"),
       --
-      testCase "TryCatch" $
-        runEval (catch (failure "Oh no!") (pure $ ValInt 1))
-          @?= ([], Right $ ValInt 1),
+      testCase "TryCatch Catch" $
+        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
+          @?= ([], Right $ ValInt 2),
       --
-      testCase "TryCatch2" $
-        eval' (TryCatch (CstInt 5) (Div (CstInt 1) (CstInt 0)))
-          @?= ([], Right $ ValInt 5),
-      --
-      testCase "TryCatch Bad" $
+      testCase "TryCatch Catch Fail" $
         eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
           @?= ([], Left "Division by zero"),
       --
@@ -81,6 +77,28 @@ pureTests =
         eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
           @?= ([], Left "Unknown variable: die"),
       --
+      testCase "Transaction rollback after failed put" $
+        let badAfterPut = Let "_" (KvPut (CstInt 0) (CstInt 1)) (Var "die")
+            prog = Let "_" (Transaction badAfterPut) (KvGet (CstInt 0))
+         in eval' prog
+              @?= ([], Left "Unknown variable: die"),
+      --
+      testCase "Nested Transaction rollback" $
+        let innerFail = Let "_" (KvPut (CstInt 1) (CstInt 42)) (Var "die")
+            outerProg =
+              Let
+                "_"
+                ( Transaction
+                    ( Let
+                        "_"
+                        (KvPut (CstInt 0) (CstInt 99))
+                        (Transaction innerFail)
+                    )
+                )
+                (KvGet (CstInt 0))
+         in eval' outerProg
+              @?= ([], Right (ValInt 99)),
+      --
       testCase "BreakLoop" $
         eval'
           ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
@@ -94,8 +112,7 @@ ioTests :: TestTree
 ioTests =
   testGroup
     "IO interpreter"
-    [ 
-      testCase "print" $
+    [ testCase "print" $
         do
           let s1 = "Lalalalala"
               s2 = "Weeeeeeeee"
@@ -117,25 +134,61 @@ ioTests =
       --              CstInt 1
       --    (out, res) @?= (["This is 1: 1", "This is also 1: 1"], Right $ ValInt 1)
 
-      --testCase "Missing Keys with input" $
+      -- testCase "Missing Keys with input" $
       --  evalIO' (KvGet (CstInt 42))
       --    >>= (@?= Left "Invalid key: ValInt 42"),
       testCase "Missing keys simulated input Int" $ do
-        (out, res) <- captureIO ["ValInt 5"] $
-          evalIO' (KvGet (CstInt 0))
+        (out, res) <-
+          captureIO ["ValInt 5"] $
+            evalIO' (KvGet (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
         res @?= Right (ValInt 5),
-              testCase "Missing keys simulated input Bool" $ do
-        (out, res) <- captureIO ["ValBool True"] $
-          evalIO' (KvGet (CstInt 0))
+      --
+      testCase "Missing keys simulated input Bool" $ do
+        (out, res) <-
+          captureIO ["ValBool True"] $
+            evalIO' (KvGet (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
         res @?= Right (ValBool True),
-        testCase "Missing keys simulated string" $ do
-        (out, res) <- captureIO ["lol"] $
-          evalIO' (KvGet (CstInt 0))
+      --
+      testCase "Missing keys simulated string" $ do
+        (out, res) <-
+          captureIO ["lol"] $
+            evalIO' (KvGet (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
-        res @?= Left "Invalid value input: lol"
-        
-
-    
+        res @?= Left "Invalid value input: lol",
+      --
+      testCase "KvPutOp" $ do
+        (out, res) <-
+          captureIO ["lol"] $
+            evalIO' (KvPut (CstInt 0) (CstInt 0))
+        out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
+        res @?= Left "Invalid value input: lol",
+      --
+      testCase "TryCatch Catch" $ do
+        (out, res) <-
+          captureIO [] $ evalIO' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
+        (out, res) @?= ([], Right $ ValInt 2),
+      --
+      testCase "TryCatch Catch Fail" $ do
+        (out, res) <-
+          captureIO [] $ evalIO' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
+        (out, res) @?= ([], Left "Division by zero"),
+      --
+      testCase "Transaction Good" $ do
+        (out, res) <-
+          captureIO [] $
+            evalIO' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
+        (out, res) @?= ([], Right (ValInt 1)),
+      --
+      testCase "Transaction Bad" $ do
+        (out, res) <-
+          captureIO [] $ evalIO' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
+        (out, res) @?= ([], Left "Invalid key: ValInt 0"),
+      --
+      testCase "Transaction Bad Propagate" $ do
+        (out, res) <-
+          captureIO [] $ evalIO' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
+        (out, res) @?= ([], Left "Unknown variable: die")
+        --
     ]

@@ -85,20 +85,31 @@ runEvalIO evalm = do
                 Just x -> pure $ k x
                 Nothing -> do
                   x <- prompt $ "Invalid key: " ++ show key ++ ". Enter a replacement: "
-                  case readVal x of
-                    Just val  -> pure $ k val
-                    Nothing -> pure $ failure ("Invalid value input: " ++ x)
+                  maybe (pure $ failure $ "Invalid value input: " ++ x) (pure . k) (readVal x)
 
       runEvalIO' r db res
-    runEvalIO' r db (Free (KvPutOp key val m)) = do
-      s <- readDB db
-      case s of
-        Left err -> runEvalIO' r db $ failure err
+    runEvalIO' r s (Free (KvPutOp key val m)) = do
+      db <- readDB s
+      case db of
+        Left err -> runEvalIO' r s $ failure err
         Right state -> do
           let state' = (key, val) : state
-          writeDB db state'
-          runEvalIO' r db m
-    runEvalIO' r s (Free (TransactionOp m k)) = runEvalIO' r s (k undefined)
+          writeDB s state'
+          runEvalIO' r s m
+    runEvalIO' r s (Free (TransactionOp m k)) =
+      withTempDB
+        ( \s' -> do
+            copyDB s s'
+            res <- runEvalIO' r s' m
+            case res of
+              -- success: commit (keep new state) and continue with k v
+              Right v -> do
+                copyDB s' s
+                pure $ k v
+              -- failure: rollback (restore original state)
+              Left err -> pure $ failure err
+        )
+        >>= runEvalIO' r s
     runEvalIO' r s (Free (LoopOp m k)) = runEvalIO' r s $ do
       x <- m
       k x
