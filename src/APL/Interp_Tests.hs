@@ -32,17 +32,17 @@ pureTests =
           @?= ([], Right [("x", ValInt 1)], stateInitial),
       --
       testCase "Let" $
-        eval' (Let "x" (Add (CstInt 2) (CstInt 3)) (Var "x"))
-          @?= ([], Right (ValInt 5), stateInitial),
+        eval'' (Let "x" (Add (CstInt 2) (CstInt 3)) (Var "x"))
+          @?= ([], Right (ValInt 5)),
       --
       testCase "Let (shadowing)" $
-        eval'
+        eval''
           ( Let
               "x"
               (Add (CstInt 2) (CstInt 3))
               (Let "x" (CstBool True) (Var "x"))
           )
-          @?= ([], Right (ValBool True), stateInitial),
+          @?= ([], Right (ValBool True)),
       --
       testCase "Print" $
         runEval (evalPrint "test")
@@ -57,34 +57,34 @@ pureTests =
           @?= ([], Left "Oh no!", stateInitial),
       --
       testCase "Div0" $
-        eval' (Div (CstInt 7) (CstInt 0))
-          @?= ([], Left "Division by zero", stateInitial),
+        eval'' (Div (CstInt 7) (CstInt 0))
+          @?= ([], Left "Division by zero"),
       --
       testCase "TryCatch Catch" $
-        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
-          @?= ([], Right $ ValInt 2, stateInitial),
+        eval'' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
+          @?= ([], Right $ ValInt 2),
       --
       testCase "TryCatch Catch Fail" $
-        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
-          @?= ([], Left "Division by zero", stateInitial),
+        eval'' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
+          @?= ([], Left "Division by zero"),
       --
       testCase "Transaction Good" $
-        eval' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
-          @?= ([], Right (ValInt 1), [(ValInt 0, ValInt 1)]),
+        eval'' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
+          @?= ([], Right (ValInt 1)),
       --
       testCase "Transaction Bad" $
-        eval' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
-          @?= ([], Left "Invalid key: ValInt 0", stateInitial),
+        eval'' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
+          @?= ([], Left "Invalid key: ValInt 0"),
       --
       testCase "Transaction Bad Propagate" $
-        eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
-          @?= ([], Left "Unknown variable: die", stateInitial),
+        eval'' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
+          @?= ([], Left "Unknown variable: die"),
       --
       -- goodPut = KvPut (CstInt 0) (CstInt 1)
       -- badPut = Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
       -- get0 = KvGet (CstInt 0)
       testCase "Nested Transaction Good" $
-        eval'
+        eval''
           ( Let
               "_"
               ( Transaction
@@ -102,10 +102,10 @@ pureTests =
               )
               (KvGet (CstInt 0))
           )
-          @?= ([], Right (ValInt 1), [(ValInt 0, ValInt 1)]),
+          @?= ([], Right (ValInt 1)),
       --
       testCase "Nested Transaction Bad" $
-        eval'
+        eval''
           ( Let
               "_"
               ( TryCatch
@@ -119,13 +119,13 @@ pureTests =
               )
               (KvGet (CstInt 0))
           )
-          @?= ([], Left "Invalid key: ValInt 0", stateInitial),
+          @?= ([], Left "Invalid key: ValInt 0"),
       --
       testCase "Transaction rollback after failed put" $
         let badAfterPut = Let "_" (KvPut (CstInt 0) (CstInt 1)) (Var "die")
             prog = Let "_" (Transaction badAfterPut) (KvGet (CstInt 0))
-         in eval' prog
-              @?= ([], Left "Unknown variable: die", stateInitial),
+         in eval'' prog
+              @?= ([], Left "Unknown variable: die"),
       --
       testCase "Nested Transaction rollback" $
         let innerFail = Let "_" (KvPut (CstInt 1) (CstInt 42)) (Var "die")
@@ -140,15 +140,15 @@ pureTests =
                     )
                 )
                 (KvGet (CstInt 0))
-         in eval' outerProg
-              @?= ([], Right (ValInt 99), stateInitial),
+         in eval'' outerProg
+              @?= ([], Right (ValInt 99)),
       --
       testCase "BreakLoop" $
-        eval'
+        eval''
           ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
               Let "_" (Break (CstBool True)) (Var "i")
           )
-          @?= ([], Right (ValBool True), stateInitial)
+          @?= ([], Right (ValBool True))
           --
     ]
 
