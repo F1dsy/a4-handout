@@ -12,6 +12,9 @@ import Test.Tasty.HUnit (testCase, (@?=))
 eval' :: Exp -> ([String], Either Error Val, State)
 eval' = runEval . eval
 
+eval'' :: Exp -> ([String], Either Error Val)
+eval'' e = let (l, r, _) = runEval . eval $ e in (l, r)
+
 evalIO' :: Exp -> IO (Either Error Val)
 evalIO' = runEvalIO . eval
 
@@ -67,7 +70,7 @@ pureTests =
       --
       testCase "Transaction Good" $
         eval' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
-          @?= ([], Right (ValInt 1), [(ValInt 0,ValInt 1)]),
+          @?= ([], Right (ValInt 1), [(ValInt 0, ValInt 1)]),
       --
       testCase "Transaction Bad" $
         eval' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
@@ -77,30 +80,46 @@ pureTests =
         eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
           @?= ([], Left "Unknown variable: die", stateInitial),
       --
-      --goodPut = KvPut (CstInt 0) (CstInt 1)
-      --badPut = Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
-      --get0 = KvGet (CstInt 0)
+      -- goodPut = KvPut (CstInt 0) (CstInt 1)
+      -- badPut = Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
+      -- get0 = KvGet (CstInt 0)
       testCase "Nested Transaction Good" $
-        eval' (
-          Let "_" (
-            Transaction (
-              Let "_"(KvPut (CstInt 0) (CstInt 1))(
-                TryCatch (Transaction (
-                  Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) 
-                      (CstBool True))))
-                    (KvGet (CstInt 0)))
-          @?= ([], Right (ValInt 1), [(ValInt 0,ValInt 1)]),
+        eval'
+          ( Let
+              "_"
+              ( Transaction
+                  ( Let
+                      "_"
+                      (KvPut (CstInt 0) (CstInt 1))
+                      ( TryCatch
+                          ( Transaction
+                              ( Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
+                              )
+                          )
+                          (CstBool True)
+                      )
+                  )
+              )
+              (KvGet (CstInt 0))
+          )
+          @?= ([], Right (ValInt 1), [(ValInt 0, ValInt 1)]),
       --
-            testCase "Nested Transaction Bad" $
-        eval' (
-          Let "_" (
-            TryCatch(
-              Transaction (
-                Transaction (
-                  Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))))
-                      (CstBool True))
-                    (KvGet (CstInt 0)))
-          @?= ([],Left "Invalid key: ValInt 0", stateInitial),
+      testCase "Nested Transaction Bad" $
+        eval'
+          ( Let
+              "_"
+              ( TryCatch
+                  ( Transaction
+                      ( Transaction
+                          ( Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
+                          )
+                      )
+                  )
+                  (CstBool True)
+              )
+              (KvGet (CstInt 0))
+          )
+          @?= ([], Left "Invalid key: ValInt 0", stateInitial),
       --
       testCase "Transaction rollback after failed put" $
         let badAfterPut = Let "_" (KvPut (CstInt 0) (CstInt 1)) (Var "die")
@@ -189,12 +208,14 @@ ioTests =
             evalIO' (KvPut (CstInt 0) (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
         res @?= Left "Invalid value input: lol",
-      --lavet KvGetOp i stedet
-            testCase "KvGetOp" $ do
+      -- lavet KvGetOp i stedet
+      testCase "KvGetOp" $ do
         (out, res) <-
-          captureIO [" ValInt 1"] $ 
+          captureIO [" ValInt 1"] $
             runEvalIO $
-              Free $ KvGetOp (ValInt 0) $ \val -> pure val
+              Free $
+                KvGetOp (ValInt 0) $
+                  \val -> pure val
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
         res @?= Right (ValInt 1),
       --
