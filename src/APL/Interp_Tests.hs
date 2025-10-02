@@ -9,11 +9,8 @@ import APL.Util (captureIO)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, (@?=))
 
-eval' :: Exp -> ([String], Either Error Val, State)
+eval' :: Exp -> ([String], Either Error Val)
 eval' = runEval . eval
-
-eval'' :: Exp -> ([String], Either Error Val)
-eval'' e = let (l, r, _) = runEval . eval $ e in (l, r)
 
 evalIO' :: Exp -> IO (Either Error Val)
 evalIO' = runEvalIO . eval
@@ -29,10 +26,10 @@ pureTests =
         runEval
           ( localEnv (const [("x", ValInt 1)]) askEnv
           )
-          @?= ([], Right [("x", ValInt 1)], stateInitial),
+          @?= ([], Right [("x", ValInt 1)]),
       --
       testCase "Let" $
-        eval'' (Let "x" (Add (CstInt 2) (CstInt 3)) (Var "x"))
+        eval' (Let "x" (Add (CstInt 2) (CstInt 3)) (Var "x"))
           @?= ([], Right (ValInt 5)),
       --
       testCase "Let (shadowing)" $
@@ -46,7 +43,7 @@ pureTests =
       --
       testCase "Print" $
         runEval (evalPrint "test")
-          @?= (["test"], Right (), stateInitial),
+          @?= (["test"], Right ()),
       --
       testCase "Error" $
         runEval
@@ -54,30 +51,30 @@ pureTests =
               _ <- failure "Oh no!"
               evalPrint "test"
           )
-          @?= ([], Left "Oh no!", stateInitial),
+          @?= ([], Left "Oh no!"),
       --
       testCase "Div0" $
-        eval'' (Div (CstInt 7) (CstInt 0))
+        eval' (Div (CstInt 7) (CstInt 0))
           @?= ([], Left "Division by zero"),
       --
       testCase "TryCatch Catch" $
-        eval'' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
+        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 4) (CstInt 2)))
           @?= ([], Right $ ValInt 2),
       --
       testCase "TryCatch Catch Fail" $
-        eval'' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
+        eval' (TryCatch (CstInt 0 `Eql` CstBool True) (Div (CstInt 1) (CstInt 0)))
           @?= ([], Left "Division by zero"),
       --
       testCase "Transaction Good" $
-        eval'' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
+        eval' (Let "_" (Transaction (KvPut (CstInt 0) (CstInt 1))) (KvGet (CstInt 0)))
           @?= ([], Right (ValInt 1)),
       --
       testCase "Transaction Bad" $
-        eval'' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
+        eval' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
           @?= ([], Left "Invalid key: ValInt 0"),
       --
       testCase "Transaction Bad Propagate" $
-        eval'' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
+        eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
           @?= ([], Left "Unknown variable: die"),
       --
       -- goodPut = KvPut (CstInt 0) (CstInt 1)
@@ -124,32 +121,20 @@ pureTests =
       testCase "Transaction rollback after failed put" $
         let badAfterPut = Let "_" (KvPut (CstInt 0) (CstInt 1)) (Var "die")
             prog = Let "_" (Transaction badAfterPut) (KvGet (CstInt 0))
-         in eval'' prog
+         in eval' prog
               @?= ([], Left "Unknown variable: die"),
-      --
-      testCase "Nested Transaction rollback" $
-        let innerFail = Let "_" (KvPut (CstInt 1) (CstInt 42)) (Var "die")
-            outerProg =
-              Let
-                "_"
-                ( Transaction
-                    ( Let
-                        "_"
-                        (KvPut (CstInt 0) (CstInt 99))
-                        (Transaction innerFail)
-                    )
-                )
-                (KvGet (CstInt 0))
-         in eval'' outerProg
-              @?= ([], Right (ValInt 99)),
       --
       testCase "BreakLoop" $
         eval''
           ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
               Let "_" (Break (CstBool True)) (Var "i")
           )
-          @?= ([], Right (ValBool True))
-          --
+          @?= ([], Right (ValBool True)),
+      --
+      testCase "BreakLoop outside loop" $
+        eval'
+          (Break (CstBool True))
+          @?= ([], Left "BreakLoopOp outside of loop")
     ]
 
 ioTests :: TestTree

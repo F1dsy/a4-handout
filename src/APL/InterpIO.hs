@@ -5,6 +5,8 @@ import APL.Util
 import System.Directory (removeFile)
 import System.IO (hFlush, readFile', stdout)
 
+data BreakOrError = Error Error | Break Val
+
 -- Converts a string into a value. Only 'ValInt's and 'ValBool' are supported.
 readVal :: String -> Maybe Val
 readVal = unserialize
@@ -57,23 +59,29 @@ withTempDB m = do
 runEvalIO :: EvalM a -> IO (Either Error a)
 runEvalIO evalm = do
   clearDB
-  runEvalIO' envEmpty dbFile evalm
+  r <- runEvalIO' envEmpty dbFile evalm
+  pure $ case r of
+    Left (Error err) -> Left err
+    Left (Break _) -> Left "BreakLoopOp outside of loop"
+    Right r' -> Right r'
   where
-    runEvalIO' :: Env -> FilePath -> EvalM a -> IO (Either Error a)
+    runEvalIO' :: Env -> FilePath -> EvalM a -> IO (Either BreakOrError a)
     runEvalIO' _ _ (Pure x) = pure $ pure x
     runEvalIO' r db (Free (ReadOp k)) = runEvalIO' r db $ k r
     runEvalIO' r db (Free (PrintOp p m)) = do
       putStrLn p
       runEvalIO' r db m
-    runEvalIO' _ _ (Free (ErrorOp e)) = pure $ Left e
+    runEvalIO' _ _ (Free (ErrorOp e)) = pure $ Left (Error e)
     runEvalIO' r db (Free (TryCatchOp m1 m2 k)) = do
       a1 <- runEvalIO' r db m1
       a2 <- runEvalIO' r db m2
       case a1 of
-        Left _ -> runEvalIO' r db $
+        Left (Error _) -> runEvalIO' r db $
           case a2 of
-            Left err -> failure err
+            Left (Error err) -> failure err
+            Left (Break v) -> k v
             Right x2 -> k x2
+        Left (Break x) -> runEvalIO' r db $ k x
         Right x -> runEvalIO' r db $ k x
     runEvalIO' r db (Free (KvGetOp key k)) = do
       s <- readDB db
@@ -101,16 +109,13 @@ runEvalIO evalm = do
         ( \s' -> do
             copyDB s s'
             res <- runEvalIO' r s' m
-            case res of
-              -- success: commit (keep new state) and continue with k v
-              Right v -> do
-                copyDB s' s
-                pure $ k v
-              -- failure: rollback (restore original state)
-              Left err -> pure $ failure err
+            
+            
+                -- failure: rollback (restore original state)
+                -- Left err -> pure $ failure err
         )
         >>= runEvalIO' r s
     runEvalIO' r s (Free (LoopOp m k)) = runEvalIO' r s $ do
       x <- m
       k x
-    runEvalIO' r s (Free (BreakLoopOp v)) = runEvalIO' r s $ Pure undefined
+    runEvalIO' _ _ (Free (BreakLoopOp v)) = pure $ Left (Break v)
