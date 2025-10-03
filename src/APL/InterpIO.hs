@@ -116,7 +116,8 @@ runEvalIO evalm = do
               Left (Error err) -> do pure $ Left (Error err)
               Left (Break v) -> do pure $ Left (Break v)
         )
-    runEvalIO' r s (Free (LoopOp m k)) = runEvalIO' r s $ do
+    runEvalIO' r s (Free (LoopOp m k)) = 
+      runEvalIO' r s $ do
       x <- m
       k x
     runEvalIO' _ _ (Free (BreakLoopOp v)) = pure $ Left (Break v)

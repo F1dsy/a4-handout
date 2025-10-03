@@ -2,19 +2,24 @@ module APL.InterpPure (runEval) where
 
 import APL.Monad
 
-data BreakOrError a = Error Error | Break a
+data BreakOrError = Error Error | Break Val
+
+prepend :: [String] -> ([String], e, st) -> ([String], e, st)
+prepend logs1 (logs2, r, st) = (logs1 ++ logs2, r, st)
 
 runEval :: EvalM a -> ([String], Either Error a)
 runEval ex =
-  let (l, r, _) = runEval' envEmpty stateInitial ex
-   in case r of
-        Left (Error err) -> (l, Left err)
-        Left (Break _) -> (l, Left "BreakLoopOp outside of loop")
-        Right r' -> (l, Right r')
+  let (logs, res, _st) = runEval' envEmpty stateInitial ex
+   in case res of
+        Left (Error err) -> (logs, Left err)
+        Left (Break _) -> (logs, Left "BreakLoopOp outside of loop")
+        Right v -> (logs, Right v)
   where
-    runEval' :: Env -> State -> EvalM a -> ([String], Either (BreakOrError a) a, State)
-    runEval' _ s (Pure x) = ([], pure x, s)
-    runEval' r s (Free (ReadOp k)) = runEval' r s $ k r
+    runEval' :: Env -> State -> EvalM a -> ([String], Either BreakOrError a, State)
+    runEval' _ s (Pure x) = 
+      ([], pure x, s)
+    runEval' r s (Free (ReadOp k)) = 
+      runEval' r s $ k r
     runEval' r s (Free (PrintOp p m)) =
       let (ps, res, s') = runEval' r s m
        in (p : ps, res, s')
@@ -43,16 +48,8 @@ runEval ex =
         (logs, Left err, _) ->
           (logs, Left err, s)
     runEval' r s (Free (LoopOp m k)) =
-      let (logs, res, s') = runEval' r s m
-       in case res of
-            Right x ->
-              let (logs', res', s'') = runEval' r s' (k x)
-               in case res' of
-                    Left (Break v) -> (logs ++ logs', Right v, s'')
-                    Left err -> (logs ++ logs', Left err, s)
-                    Right _ -> runEval' r s'' (Free (LoopOp m k))
-            Left (Error err) ->
-              runEval' r s' $ failure err
-            Left (Break v') ->
-              (logs, Right v', s')
+      case runEval' r s m of
+        (logs, Left (Break v), s1) -> prepend logs (runEval' r s1 (k v))
+        (logs, Right v, s1) -> prepend logs (runEval' r s1 (k v))
+        (logs, Left err, s1) -> (logs, Left err, s1)
     runEval' _ s (Free (BreakLoopOp v)) = ([], Left (Break v), s)
