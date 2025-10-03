@@ -186,23 +186,12 @@ ioTests =
             evalIO' (KvGet (CstInt 0))
         out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
         res @?= Left "Invalid value input: lol",
-      -- Tror ikke vi skal have KvPutOp
-      testCase "KvPutOp" $ do
+      -- 
+      testCase "kvPut then KvGet " $ do
         (out, res) <-
-          captureIO ["lol"] $
-            evalIO' (KvPut (CstInt 0) (CstInt 0))
-        out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
-        res @?= Left "Invalid value input: lol",
-      -- lavet KvGetOp i stedet
-      testCase "KvGetOp" $ do
-        (out, res) <-
-          captureIO [" ValInt 1"] $
-            runEvalIO $
-              Free $
-                KvGetOp (ValInt 0) $
-                  \val -> pure val
-        out @?= ["Invalid key: ValInt 0. Enter a replacement: "]
-        res @?= Right (ValInt 1),
+          captureIO [] $
+            evalIO' (Let "_" (KvPut (CstInt 0) (CstInt 42)) (KvGet (CstInt 0)))
+        (out, res) @?= ([], Right (ValInt 42)),
       --
       testCase "TryCatch Catch" $ do
         (out, res) <-
@@ -222,12 +211,24 @@ ioTests =
       --
       testCase "Transaction Bad" $ do
         (out, res) <-
-          captureIO [] $ evalIO' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
-        (out, res) @?= ([], Left "Invalid key: ValInt 0"),
+          captureIO ["ValInt 0"] $ evalIO' (TryCatch (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die"))) (KvGet (CstInt 0)))
+        (out, res) @?= (["Invalid key: ValInt 0. Enter a replacement: "], Right (ValInt 0)),
       --
       testCase "Transaction Bad Propagate" $ do
         (out, res) <-
           captureIO [] $ evalIO' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
-        (out, res) @?= ([], Left "Unknown variable: die")
-        --
+        (out, res) @?= ([], Left "Unknown variable: die"),
+      --
+      testCase "IO BreakLoop" $ do
+        (out, res) <-
+          captureIO [] $
+            evalIO'
+              ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
+                  Let "_" (Break (CstBool True)) (Var "i")
+              )
+        (out, res) @?= ([], Right (ValBool True)),
+      --
+      testCase "IO BreakLoop outside loop" $ do
+        (out, res) <- captureIO [] $ evalIO' (Break (CstBool True))
+        (out, res) @?= ([], Left "BreakLoopOp outside of loop")
     ]
