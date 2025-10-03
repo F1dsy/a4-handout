@@ -109,12 +109,13 @@ runEvalIO evalm = do
         ( \s' -> do
             copyDB s s'
             res <- runEvalIO' r s' m
-            
-            
-                -- failure: rollback (restore original state)
-                -- Left err -> pure $ failure err
+            case res of
+              Right v -> do
+                copyDB s' s
+                runEvalIO' r s $ k v
+              Left (Error err) -> do pure $ Left (Error err)
+              Left (Break v) -> do pure $ Left (Break v)
         )
-        >>= runEvalIO' r s
     runEvalIO' r s (Free (LoopOp m k)) = runEvalIO' r s $ do
       x <- m
       k x

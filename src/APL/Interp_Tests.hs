@@ -33,7 +33,7 @@ pureTests =
           @?= ([], Right (ValInt 5)),
       --
       testCase "Let (shadowing)" $
-        eval''
+        eval'
           ( Let
               "x"
               (Add (CstInt 2) (CstInt 3))
@@ -81,7 +81,7 @@ pureTests =
       -- badPut = Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
       -- get0 = KvGet (CstInt 0)
       testCase "Nested Transaction Good" $
-        eval''
+        eval'
           ( Let
               "_"
               ( Transaction
@@ -102,7 +102,7 @@ pureTests =
           @?= ([], Right (ValInt 1)),
       --
       testCase "Nested Transaction Bad" $
-        eval''
+        eval'
           ( Let
               "_"
               ( TryCatch
@@ -125,7 +125,7 @@ pureTests =
               @?= ([], Left "Unknown variable: die"),
       --
       testCase "BreakLoop" $
-        eval''
+        eval'
           ( ForLoop ("p", CstInt 0) ("i", CstInt 100) $
               Let "_" (Break (CstBool True)) (Var "i")
           )

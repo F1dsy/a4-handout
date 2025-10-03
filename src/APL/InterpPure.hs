@@ -2,7 +2,7 @@ module APL.InterpPure (runEval) where
 
 import APL.Monad
 
-data BreakOrError = Error Error | Break Val
+data BreakOrError a = Error Error | Break a
 
 runEval :: EvalM a -> ([String], Either Error a)
 runEval ex =
@@ -12,7 +12,7 @@ runEval ex =
         Left (Break _) -> (l, Left "BreakLoopOp outside of loop")
         Right r' -> (l, Right r')
   where
-    runEval' :: Env -> State -> EvalM a -> ([String], Either BreakOrError a, State)
+    runEval' :: Env -> State -> EvalM a -> ([String], Either (BreakOrError a) a, State)
     runEval' _ s (Pure x) = ([], pure x, s)
     runEval' r s (Free (ReadOp k)) = runEval' r s $ k r
     runEval' r s (Free (PrintOp p m)) =
@@ -46,14 +46,13 @@ runEval ex =
       let (logs, res, s') = runEval' r s m
        in case res of
             Right x ->
-              -- body completed without error: loop again
               let (logs', res', s'') = runEval' r s' (k x)
                in case res' of
-                    Left (Break v') -> (logs ++ logs', Left (Break v'), s'')
+                    Left (Break v) -> (logs ++ logs', Right v, s'')
                     Left err -> (logs ++ logs', Left err, s)
                     Right _ -> runEval' r s'' (Free (LoopOp m k))
             Left (Error err) ->
               runEval' r s' $ failure err
-            Left (Break v) ->
-              (logs, Left (Break v), s')
+            Left (Break v') ->
+              (logs, Right v', s')
     runEval' _ s (Free (BreakLoopOp v)) = ([], Left (Break v), s)
