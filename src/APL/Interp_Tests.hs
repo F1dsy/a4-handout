@@ -77,9 +77,6 @@ pureTests =
         eval' (Transaction (Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")))
           @?= ([], Left "Unknown variable: die"),
       --
-      -- goodPut = KvPut (CstInt 0) (CstInt 1)
-      -- badPut = Let "_" (KvPut (CstInt 0) (CstBool False)) (Var "die")
-      -- get0 = KvGet (CstInt 0)
       testCase "Nested Transaction Good" $
         eval'
           ( Let
